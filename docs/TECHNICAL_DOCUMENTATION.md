@@ -330,25 +330,45 @@ Endpoints are served by FastAPI microservices across their respective container 
 | `OPERATOR_WEBHOOK_URL` | `attack_simulator.py` | Destination URL for Falco security events. | `http://localhost:8088/api/v1/security-events` |
 | `GF_SECURITY_ADMIN_PASSWORD` | `grafana` | Administrator password for Grafana UI. | `admin` |
 
-### Local setup commands
+### Step-by-step local setup from scratch
 
-```powershell
-# 1. Clone or navigate to the repository
-cd C:\Users\ritvi\.gemini\antigravity\scratch\sentinel-mesh
+```bash
+# Step 1: Verify Python 3.10+ installation
+python --version
+# (If missing, install Python 3.11 via winget, brew, or apt)
 
-# 2. Build and launch all containers
+# Step 2: Verify Docker Desktop installation
+docker --version
+docker compose version
+# (Ensure Docker Desktop daemon is started and status is green)
+
+# Step 3: Clone the repository
+git clone https://github.com/ritvikindupuri/SREProject.git
+cd SREProject
+
+# Step 4: Create and activate virtual environment
+python -m venv venv
+# On Windows: .\venv\Scripts\Activate.ps1
+# On Linux/macOS: source venv/bin/activate
+pip install requests
+
+# Step 5: Launch full container stack
 docker compose up -d --build
 
-# 3. Verify container health status
+# Step 6: Verify container health
 docker compose ps
 
-# 4. Generate continuous synthetic transactions
+# Step 7: Verify health endpoints
+curl http://localhost:8005/healthz
+curl http://localhost:8088/healthz
+
+# Step 8: Execute live synthetic workload
 python traffic-engine/load_generator.py --rate 0.05 --workers 3
 
-# 5. Simulate MITRE ATT&CK container runtime breach
+# Step 9: Simulate MITRE ATT&CK runtime exploit
 python traffic-engine/attack_simulator.py --attack shell --target orders-service
 
-# 6. Execute SRE 14.4x SLO error budget burn experiment
+# Step 10: Execute SRE 14.4x SLO error budget burn chaos
 python traffic-engine/chaos_injector.py --scenario burn-rate --duration 30
 ```
 

@@ -179,34 +179,153 @@ The CoreOps platform provides deep, real-time observability across the 4 Golden 
 
 ---
 
-## Setup Instructions
+## Setup Instructions (Step-by-Step From Scratch)
 
-### Prerequisites
-* Docker Desktop (version 24.0+ with Docker Compose)
-* Python 3.10+ (with requests installed for simulation scripts)
+Follow these baby steps to set up and run the entire platform from scratch on a clean machine.
 
-### Step 1: Clone or Navigate to the Project Directory
-```powershell
-cd C:\Users\ritvi\.gemini\antigravity\scratch\sentinel-mesh
+### Step 1: Install Python (If Not Already Installed)
+
+Choose your operating system to install Python 3.10+:
+
+* **Windows (via winget or installer):**
+  ```powershell
+  winget install Python.Python.3.11
+  ```
+  *(Or download and run the installer from [python.org/downloads](https://www.python.org/downloads/). Ensure you check the box **"Add python.exe to PATH"**).*
+* **macOS (via Homebrew):**
+  ```bash
+  brew install python3
+  ```
+* **Linux (Ubuntu/Debian):**
+  ```bash
+  sudo apt update && sudo apt install -y python3 python3-pip python3-venv
+  ```
+
+**Verify Python Installation:**
+```bash
+python --version
+# Output should show: Python 3.10.x, 3.11.x, 3.12.x, or higher
 ```
 
-### Step 2: Install Local Python Dependencies for Simulation Tools
-```powershell
-pip install requests
+---
+
+### Step 2: Install Docker Desktop (If Not Already Installed)
+
+Docker Desktop provides the container engine and Docker Compose orchestrator:
+
+* **Windows:**
+  ```powershell
+  winget install Docker.DockerDesktop
+  ```
+  *(Or download from [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)).*
+* **macOS:**
+  ```bash
+  brew install --cask docker
+  ```
+* **Linux:**
+  ```bash
+  sudo apt install -y docker.io docker-compose-v2
+  sudo systemctl enable --now docker
+  sudo usermod -aG docker $USER
+  ```
+
+**Launch Docker Desktop:**
+1. Open Docker Desktop from your Start Menu / Applications folder.
+2. Wait 15–30 seconds until the bottom status icon turns green ("Engine running").
+
+**Verify Docker Installation:**
+```bash
+docker --version
+docker compose version
 ```
 
-### Step 3: Launch the Full Container Stack
-Build and launch all 8 services in detached mode with a single command:
-```powershell
+---
+
+### Step 3: Clone the Repository
+
+Clone the project repository and enter the directory:
+
+```bash
+git clone https://github.com/ritvikindupuri/SREProject.git
+cd SREProject
+```
+
+---
+
+### Step 4: Set Up a Python Virtual Environment & Install Tooling
+
+Create an isolated virtual environment and install the simulation dependencies:
+
+* **Windows (PowerShell):**
+  ```powershell
+  python -m venv venv
+  .\venv\Scripts\Activate.ps1
+  pip install requests
+  ```
+  *(If PowerShell displays an Execution Policy error, run: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` then activate again).*
+
+* **macOS / Linux (Bash):**
+  ```bash
+  python3 -m venv venv
+  source venv/bin/activate
+  pip install requests
+  ```
+
+---
+
+### Step 5: Launch the Entire Platform Stack
+
+Build and launch all 8 microservices and observability containers in detached mode:
+
+```bash
 docker compose up -d --build
 ```
 
-### Step 4: Verify All Containers Are Healthy
-Check that all 8 containers are running and healthy:
-```powershell
+---
+
+### Step 6: Verify All Containers Are Running & Healthy
+
+Run the container status check:
+
+```bash
 docker compose ps
 ```
-*Expected output: coreops-gateway, orders-service, payment-service, inventory-service, coreops-operator, coreops-prometheus, coreops-grafana, and coreops-alertmanager all show Up.*
+
+**Expected Output:**
+```
+NAME                   IMAGE                       STATUS
+coreops-alertmanager   prom/alertmanager:v0.27.0   Up (healthy)
+coreops-gateway        coreops/gateway:latest      Up (healthy)
+coreops-grafana        grafana/grafana:11.1.0      Up (healthy)
+coreops-operator       coreops/operator:latest     Up (healthy)
+coreops-prometheus     prom/prometheus:v2.54.0     Up (healthy)
+inventory-service      coreops/inventory:latest    Up (healthy)
+orders-service         coreops/orders:latest       Up (healthy)
+payment-service        coreops/payment:latest      Up (healthy)
+```
+
+---
+
+### Step 7: Verify Core Health Endpoints
+
+Test that the API Gateway and Operator are responding:
+
+* **Windows (PowerShell):**
+  ```powershell
+  Invoke-RestMethod -Uri "http://localhost:8005/healthz"
+  Invoke-RestMethod -Uri "http://localhost:8088/healthz"
+  ```
+* **macOS / Linux (cURL):**
+  ```bash
+  curl http://localhost:8005/healthz
+  curl http://localhost:8088/healthz
+  ```
+
+**Expected Output:**
+```json
+{"status": "healthy", "service": "api-gateway"}
+{"status": "healthy", "operator": "CoreOps-Controller-v1"}
+```
 
 ---
 
