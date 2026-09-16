@@ -1,0 +1,20 @@
+- rule: Unauthorized Shell Spawned in Production Container
+  desc: Detect interactive shell spawned inside a production application container (MITRE T1059.004)
+  condition: container and proc.name in (bash, sh, zsh, ksh, csh) and not proc.pname in (docker, containerd, kubelet)
+  output: "CRITICAL Unauthorized shell spawned in container (user=%user.name container_id=%container.id container_name=%container.name cmd=%proc.cmdline parent=%proc.pname)"
+  priority: CRITICAL
+  tags: [container, mitre_execution, t1059, zero_trust]
+
+- rule: Sensitive Credential Access Untrusted
+  desc: Detect read attempts on Kubernetes service account token or secret mounts (MITRE T1552.007)
+  condition: container and fd.name startswith "/var/run/secrets/kubernetes.io/serviceaccount" and evt.type in (open, openat)
+  output: "CRITICAL Attempt to read Kubernetes ServiceAccount Token (user=%user.name file=%fd.name container=%container.name proc=%proc.cmdline)"
+  priority: CRITICAL
+  tags: [credential_access, mitre_credential_access, t1552, kubernetes]
+
+- rule: Read System Sensitive Files in Container
+  desc: Detect attempts to read /etc/shadow, /etc/passwd or SSH private keys inside container
+  condition: container and (fd.name in (/etc/shadow, /etc/gshadow) or fd.name startswith "/root/.ssh") and evt.type in (open, openat)
+  output: "CRITICAL Unauthorized read of system credential files (user=%user.name file=%fd.name container=%container.name proc=%proc.cmdline)"
+  priority: CRITICAL
+  tags: [security, container, shadow]

@@ -1,0 +1,128 @@
+services:
+  # -------------------------------------------------------------
+  # Microservices Workload Layer
+  # -------------------------------------------------------------
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    image: coreops/gateway:latest
+    container_name: coreops-gateway
+    ports:
+      - "8005:8000"
+    environment:
+      - ORDERS_SERVICE_URL=http://orders-service:8001
+      - PAYMENT_SERVICE_URL=http://payment-service:8002
+      - INVENTORY_SERVICE_URL=http://inventory-service:8003
+    depends_on:
+      - orders-service
+      - payment-service
+      - inventory-service
+    networks:
+      - coreops-net
+
+  orders-service:
+    build:
+      context: ./services/orders-service
+      dockerfile: Dockerfile
+    image: coreops/orders:latest
+    container_name: orders-service
+    ports:
+      - "8001:8001"
+    environment:
+      - PAYMENT_SERVICE_URL=http://payment-service:8002
+      - INVENTORY_SERVICE_URL=http://inventory-service:8003
+    networks:
+      - coreops-net
+
+  payment-service:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    image: coreops/payment:latest
+    container_name: payment-service
+    ports:
+      - "8002:8002"
+    networks:
+      - coreops-net
+
+  inventory-service:
+    build:
+      context: ./services/inventory-service
+      dockerfile: Dockerfile
+    image: coreops/inventory:latest
+    container_name: inventory-service
+    ports:
+      - "8003:8003"
+    networks:
+      - coreops-net
+
+  # -------------------------------------------------------------
+  # SRE & Security Operator (Autonomous Controller)
+  # -------------------------------------------------------------
+  coreops-operator:
+    build:
+      context: ./operator
+      dockerfile: Dockerfile
+    image: coreops/operator:latest
+    container_name: coreops-operator
+    ports:
+      - "8088:8088"
+    environment:
+      - ORDERS_URL=http://orders-service:8001
+      - PAYMENT_URL=http://payment-service:8002
+      - INVENTORY_URL=http://inventory-service:8003
+    networks:
+      - coreops-net
+
+  # -------------------------------------------------------------
+  # Observability & Alerting Stack
+  # -------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: coreops-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/slo_alerts.yml:/etc/prometheus/slo_alerts.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - coreops-net
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: coreops-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    networks:
+      - coreops-net
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: coreops-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./observability/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - coreops-net
+
+networks:
+  coreops-net:
+    driver: bridge

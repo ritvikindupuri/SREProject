@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: isolate-quarantined-workloads
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      sentinel.mesh/quarantine: "true"
+  policyTypes:
+  - Ingress
+  - Egress
+  # Ingress is completely empty -> Deny ALL incoming connections
+  ingress: []
+  # Egress is completely empty -> Deny ALL outgoing connections (blocks Reverse Shells & C2)
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress

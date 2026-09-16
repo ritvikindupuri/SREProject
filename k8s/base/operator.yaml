@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentinel-operator
+  labels:
+    app: sentinel-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sentinel-operator
+  template:
+    metadata:
+      labels:
+        app: sentinel-operator
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8088"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: sentinel-operator-sa
+      containers:
+        - name: sentinel-operator
+          image: sentinel-mesh/operator:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8088
+              name: http
+          env:
+            - name: ORDERS_URL
+              value: "http://orders-service:8001"
+            - name: PAYMENT_URL
+              value: "http://payment-service:8002"
+            - name: INVENTORY_URL
+              value: "http://inventory-service:8003"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8088
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentinel-operator
+  labels:
+    app: sentinel-operator
+spec:
+  ports:
+    - port: 8088
+      targetPort: 8088
+      name: http
+  selector:
+    app: sentinel-operator

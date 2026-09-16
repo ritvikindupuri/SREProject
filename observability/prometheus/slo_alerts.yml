@@ -1,0 +1,72 @@
+groups:
+  - name: coreops_availability_slo_alerts
+    rules:
+      # Target SLO: 99.9% Availability (Error Budget = 0.1% or 0.001)
+      # Google SRE Multi-Window Multi-Burn-Rate Alerting Rules
+
+      # -------------------------------------------------------------
+      # Alert 1: Page SRE immediately (14.4x burn rate in 1h and 5m)
+      # Consumes 2% of total 30-day budget in 1 hour.
+      # -------------------------------------------------------------
+      - alert: CriticalSLOBurnRate14_4x
+        expr: |
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[1h])) 
+            / 
+            sum(rate(http_requests_total[1h]))
+          ) > (14.4 * 0.001)
+          and
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[5m])) 
+            / 
+            sum(rate(http_requests_total[5m]))
+          ) > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+          tier: tier-1
+          slo: "99.9% availability"
+          burn_rate: "14.4x"
+        annotations:
+          summary: "Critical 14.4x SLO Error Budget Burn Rate on microservices"
+          description: "Microservices error rate is currently burning through 2% of the 30-day error budget in under 1 hour. Immediate mitigation required."
+
+      # -------------------------------------------------------------
+      # Alert 2: High Alert (6x burn rate in 6h and 30m)
+      # Consumes 5% of total budget in 6 hours.
+      # -------------------------------------------------------------
+      - alert: HighSLOBurnRate6x
+        expr: |
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[6h])) 
+            / 
+            sum(rate(http_requests_total[6h]))
+          ) > (6 * 0.001)
+          and
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[30m])) 
+            / 
+            sum(rate(http_requests_total[30m]))
+          ) > (6 * 0.001)
+        for: 15m
+        labels:
+          severity: high
+          slo: "99.9% availability"
+          burn_rate: "6x"
+        annotations:
+          summary: "High 6x SLO Error Budget Burn Rate"
+          description: "Error budget is burning at 6x nominal rate over the last 6 hours."
+
+      # -------------------------------------------------------------
+      # Alert 3: Latency SLO Violation (P99 > 500ms for 5m)
+      # -------------------------------------------------------------
+      - alert: LatencySLODegradationP99
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)) > 0.500
+        for: 3m
+        labels:
+          severity: warning
+          slo: "99% requests < 500ms"
+        annotations:
+          summary: "P99 latency exceeding 500ms SLO threshold on {{ $labels.endpoint }}"
+          description: "P99 latency is currently {{ $value }}s on {{ $labels.endpoint }}."
