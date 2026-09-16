@@ -48,42 +48,21 @@ Sections 2–3 describe the system architecture and operational lifecycle. Secti
 
 The application utilizes Docker containers orchestrated via Docker Compose and Kubernetes manifests. The API Gateway routes incoming client traffic across internal microservices. Prometheus continuously scrapes Golden Signals and evaluates SLO burn rates, while Falco monitors kernel syscalls to detect runtime compromises. The custom Autonomous Operator consumes webhook streams from both Alertmanager and Falco to execute machine-speed containment.
 
-```mermaid
-graph TD
-    subgraph INGRESS AND WORKLOAD CLUSTER ["🐳 DOCKER / ⎈ KUBERNETES WORKLOAD CLUSTER"]
-        Client(["fa:fa-users Synthetic Users / Traffic Engine"]) -->|HTTP :8005| GW["<b>API Gateway Service</b><br/>⚡ FastAPI · Uvicorn"]
-        GW -->|REST / Internal DNS| Orders["<b>Orders Service</b><br/>⚡ FastAPI · 🗄️ PostgreSQL"]
-        Orders -->|Atomic Stock Lock| Inv["<b>Inventory Service</b><br/>⚡ FastAPI · Memory State"]
-        Orders -->|Idempotent Charge| Pay["<b>Payment Service</b><br/>⚡ FastAPI · 🟥 Redis Cache"]
-    end
-
-    subgraph SRE OBSERVABILITY AND ALERTING ["📈 SRE OBSERVABILITY & TELEMETRY STACK"]
-        GW -. Metrics Scrape .-> Prom["<b>Prometheus Engine</b><br/>🔥 Prometheus Server :9090"]
-        Orders -. Metrics Scrape .-> Prom
-        Inv -. Metrics Scrape .-> Prom
-        Pay -. Metrics Scrape .-> Prom
-        Prom -->|SLO Multi-Burn Rate| AM["<b>Alertmanager</b><br/>🔔 Alert Routing :9093"]
-        Prom -->|Live Time-Series| Grafana["<b>Grafana Dashboards</b><br/>📊 Grafana Server :3000"]
-    end
-
-    subgraph RUNTIME SECURITY AND CONTROL PLANE ["🛡️ CYBERSECURITY & AUTONOMOUS CONTROL PLANE"]
-        Orders -. Kernel Syscalls .-> Falco["<b>Falco eBPF Engine</b><br/>🐧 Linux Kernel Probe"]
-        Pay -. Kernel Syscalls .-> Falco
-        Falco -->|Runtime Threat Webhook| Operator["<b>CoreOps Operator</b><br/>🤖 Autonomous Controller :8088"]
-        AM -->|Critical 14.4x Burn Webhook| Operator
-        Operator -->|Zero-Trust Dynamic Isolation| NetPol["<b>Kubernetes NetworkPolicy</b><br/>⎈ Zero Ingress / Egress"]
-        Operator -->|Cryptographic Dump| Audit[("<b>Forensic Audit Logs</b><br/>📁 JSON Incident Records")]
-        Operator -->|Self-Healing Signal| Orders
-    end
-```
+![CoreOps System Architecture](images/architecture-diagram.jpg)
 
 <div align="center">
-  <strong>Figure 1. Application boundaries, official services, and telemetry flow.</strong>
+  <strong>Figure 1. CoreOps Platform – SRE & DevSecOps Architecture</strong>
 </div>
 
 <br/>
 
-The API Gateway exposes port `8005` to clients and routes requests to downstream microservices over the internal `coreops-net` bridge network. Prometheus scrapes `/metrics` endpoints every 5 seconds. When runtime security anomalies or SLO burn violations occur, Alertmanager and Falco dispatch structured webhooks to the CoreOps Operator on port `8088` for immediate automated containment.
+The architecture connects six distinct operational subsystems:
+1. **Traffic & Simulation:** Workload generator (`load_generator.py`), chaos injector (`chaos_injector.py`), and threat simulator (`attack_simulator.py`).
+2. **Core Services Runtime:** Containerized FastAPI microservices (`api-gateway` on `:8005`, `orders-service` on `:8001`, `inventory-service` on `:8003`, and `payment-service` on `:8002`) with persistent SQLite/PostgreSQL order logs.
+3. **Observability & SRE Pipeline:** Prometheus (`:9090`) scraping `/metrics` every 5 seconds, Grafana (`:3000`) dashboards, and Alertmanager (`:9093`) evaluating multi-window multi-burn-rate SLO rules.
+4. **Autonomous Operator:** CoreOps Controller (`:8088`), Quarantine Engine (`quarantine.py`), and SRE Self-Healer (`self_healer.py`) executing automated zero-trust containment and failure recovery.
+5. **Security & Policy Assets:** Falco eBPF rules, Kubernetes manifests, Quarantine NetworkPolicies, and Kyverno admission control rules.
+6. **Outputs & Visibility:** Real-time dashboards, metrics time-series, SLO alerts, operator health APIs, immutable JSON forensic audit logs, and active workload quarantine states.
 
 ---
 

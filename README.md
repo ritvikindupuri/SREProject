@@ -41,69 +41,47 @@ A common flaw in portfolio projects is the use of static, hardcoded, or mocked t
 
 ## System Architecture
 
-```mermaid
-graph TD
-    subgraph Client and Simulation Layer
-        Traffic[Live Traffic Engine / Synthetic User Journeys] -->|HTTP :8005| Gateway[API Gateway Service]
-        Chaos[SRE Chaos Injector / Latency and 500 Cascade] -. Fault Injection .-> Orders
-        Attack[MITRE ATT&CK Simulator / T1059 Shell and T1552 Scrape] -. Container Exploit .-> Payment
-    end
-
-    subgraph Core Microservices Workload
-        Gateway -->|REST Route| Orders[Orders Service :8001]
-        Orders -->|Atomic Stock Lock| Inventory[Inventory Service :8003]
-        Orders -->|Idempotent Charge| Payment[Payment Service :8002]
-        Orders -. Persistent Writes .-> DB[(SQLite / PostgreSQL)]
-    end
-
-    subgraph Observability and Alerting Stack
-        Gateway -. Scrape Metrics .-> Prom[Prometheus Server :9090]
-        Orders -. Scrape Metrics .-> Prom
-        Inventory -. Scrape Metrics .-> Prom
-        Payment -. Scrape Metrics .-> Prom
-        Prom -->|SLO Burn-Rate Alert| AM[Alertmanager :9093]
-        Prom -->|Live Time-Series| Grafana[Grafana Dashboards :3000]
-    end
-
-    subgraph Security and Autonomous Control Plane
-        Orders -. Kernel Syscalls .-> Falco[Falco eBPF Engine]
-        Payment -. Kernel Syscalls .-> Falco
-        Falco -->|Runtime Threat Webhook| Operator[CoreOps Autonomous Operator :8088]
-        AM -->|Critical 14.4x Burn Webhook| Operator
-        Operator -->|Zero-Trust Isolation| NetPol[Kubernetes NetworkPolicy Engine]
-        Operator -->|Forensic JSON Snapshot| Audit[(Forensic Audit Repository)]
-        Operator -->|Self-Healing Reconfiguration| Orders
-    end
-```
+![CoreOps Platform System Architecture](docs/images/architecture-diagram.jpg)
 
 <div align="center">
-  <strong>Figure 1. CoreOps End-to-End System Architecture</strong>
+  <strong>Figure 1. CoreOps Platform – SRE & DevSecOps Architecture</strong>
 </div>
 
 ---
 
 ### Flow-by-Flow Explanation of the Architecture
 
-1. **Client Ingress and Routing Flow:**
-   - Client traffic (synthetic user sessions or real HTTP calls) enters through the API Gateway on port 8005.
-   - The Gateway records end-to-end request duration in Prometheus histograms and forwards requests to the appropriate internal microservices (orders-service, inventory-service, payment-service) across the private coreops-net bridge network.
+The CoreOps architecture is organized into six interconnected layers working as a continuous, closed-loop SRE and DevSecOps platform:
 
-2. **Transactional Dependency Flow:**
-   - When a purchase request hits orders-service (:8001), it initiates a database transaction.
-   - It queries inventory-service (:8003) to atomically verify and reserve hardware stock.
-   - It invokes payment-service (:8002) with a unique idempotency key to execute payment processing and prevent duplicate charges.
-   - The order state transitions to COMPLETED and the transaction is committed.
+1. **Traffic & Simulation Engine (Box 1):**
+   - **Load Generator (`traffic-engine/load_generator.py`):** Establishes real TCP connections and dispatches live HTTP GET/POST transactions to the API Gateway to generate baseline production workload.
+   - **Chaos Injector (`traffic-engine/chaos_injector.py`):** Directly issues chaos control payloads to `/api/chaos/configure` on downstream services to simulate cascading dependencies, artificial latency, and 5xx error spikes.
+   - **Attack Simulator (`traffic-engine/attack_simulator.py`):** Synthesizes MITRE ATT&CK runtime exploits (e.g., container terminal shell spawns and Kubernetes service account token scrapes) and streams Falco-compliant JSON security event alerts to the Operator webhook.
 
-3. **Telemetry and SRE Alerting Flow:**
-   - Every microservice exports native Prometheus metrics at /metrics.
-   - Prometheus (:9090) scrapes all endpoints every 5 seconds, computing 4 Golden Signals and evaluating Google SRE multi-window burn-rate alert rules.
-   - Grafana (:3000) renders real-time visual graphs for latency percentiles (P50/P95/P99), request throughput, 5xx/4xx error ratios, and active quarantines.
-   - If error rates exceed SLO burn-rate thresholds, Alertmanager (:9093) dispatches webhook alerts directly to the Autonomous Operator.
+2. **Core Services Runtime Layer (Box 2):**
+   - **API Gateway (`:8005` / `:8000`):** The single ingress entry point built on FastAPI/Uvicorn. It routes client requests across `/api/*`, `/api/orders`, `/api/inventory`, and `/api/payments`, while recording end-to-end latency histograms.
+   - **Orders Service (`:8001`):** Manages the order lifecycle, writes persistent transactions to the SQLite database (`orders.db` via SQLAlchemy), coordinates with the Inventory Service via atomic `reserve()` RPC calls, and coordinates with Payment Service via idempotent `process()` calls.
+   - **Inventory Service (`:8003`):** Maintains atomic stock counters and inventory reservation logic for hardware SKUs, returning real HTTP 400 rejections when stock depletes.
+   - **Payment Service (`:8002`):** Handles deterministic payment processing and writes to an internal transaction journal.
 
-4. **Runtime Security and Threat Containment Flow:**
-   - If an adversary executes an unauthorized binary (e.g. /bin/bash in production) or reads sensitive Kubernetes secrets, the Falco eBPF engine intercepts the Linux kernel syscall.
-   - Falco streams the security violation to the CoreOps Operator (:8088).
-   - The Operator immediately patches the pod with coreops.io/quarantine=true, triggering a zero-ingress/egress NetworkPolicy to block all network lateral movement, dumps forensic metadata to forensic_audit_logs/, and logs the remediation in Prometheus.
+3. **Observability & SRE Pipeline (Box 3):**
+   - **Prometheus (`:9090`):** Automatically scrapes `/metrics` endpoints from all microservices every 5 seconds. It calculates the 4 Golden Signals and continuously evaluates multi-window multi-burn-rate SLO alerting rules (14.4x fast burn and 6x slow burn over 1h/5m and 6h/30m windows, plus P99 latency thresholds).
+   - **Grafana (`:3000`):** Connects to Prometheus as a live time-series datasource to render pre-provisioned dashboards covering Golden Signals, service health, and SLO error budget consumption.
+   - **Alertmanager (`:9093`):** Ingests firing SLO burn alerts from Prometheus, deduplicates and groups alerts, and routes them via webhook (`POST /api/v1/sre-alerts`) to the autonomous operator.
+
+4. **Autonomous Operator Control Plane (Box 4):**
+   - **CoreOps Operator (`:8088`):** A custom Python/FastAPI controller exposing `/metrics` and `/api/v1/status` to manage autonomous remediation across the cluster.
+   - **Quarantine Engine (`quarantine.py`):** Intercepts security events from `/api/v1/security-events`, applies Zero-Trust quarantine states to compromised workloads, patches workload labels (`coreops.io/quarantine=true`), and writes immutable JSON forensic artifacts to `forensic_audit_logs/`.
+   - **SRE Self-Healer (`self_healer.py`):** Intercepts multi-window SLO burn alerts from `/api/v1/sre-alerts`, executes automated rollback/reconfiguration by calling `/api/chaos/configure` on affected services, and restores healthy baseline operation without human intervention.
+
+5. **Security & Policy Assets (Box 5):**
+   - **Falco Rules (`security/falco/falco_rules.local.yaml`):** Defines eBPF kernel detection signatures for unauthorized terminal shell executions, service account token theft, and sensitive credential reads (`/etc/shadow`).
+   - **Kubernetes YAML (`k8s/base/`):** Contains declarative definitions for deployment controllers, RBAC permissions, and Service endpoints.
+   - **Quarantine NetworkPolicy (`security/network-policies/quarantine-policy.yaml`):** Zero-Trust policy that instantly cuts all ingress and egress network traffic for any container labeled with `quarantine: "true"`.
+   - **Kyverno Policies (`security/policies/kyverno-zero-trust-policies.yaml`):** Admission control rules enforcing non-root execution (UID 10001), dropping all Linux capabilities (`ALL`), and mounting read-only root filesystems.
+
+6. **Outputs & Visibility (Box 6):**
+   - Provides unified operational visibility across Grafana dashboards, Prometheus metric time-series, Alertmanager SLO alerts, Operator status endpoints, immutable JSON forensic incident audit logs, and active quarantined workloads.
 
 ---
 
