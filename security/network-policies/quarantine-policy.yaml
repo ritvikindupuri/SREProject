@@ -5,8 +5,10 @@ metadata:
   namespace: default
 spec:
   podSelector:
-    matchLabels:
-      sentinel.mesh/quarantine: "true"
+    matchExpressions:
+      - key: coreops.io/quarantine
+        operator: In
+        values: ["true"]
   policyTypes:
   - Ingress
   - Egress
