@@ -1,4 +1,4 @@
-# CoreOps Platform — Autonomous Cloud-Native SRE & DevSecOps Platform
+# CoreOps Platform — Cloud-Native SRE & DevSecOps Platform
 
 > An enterprise-grade, event-driven Site Reliability Engineering and runtime cybersecurity defense platform featuring live microservices, Google SRE-standard multi-burn-rate SLO alerting, kernel-level eBPF threat detection, and an autonomous incident remediation operator.
 
