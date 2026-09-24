@@ -18,6 +18,10 @@ spec:
         prometheus.io/port: "8088"
         prometheus.io/path: "/metrics"
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
       serviceAccountName: sentinel-operator-sa
       containers:
         - name: sentinel-operator
@@ -40,12 +44,24 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: forensic-logs
+              mountPath: /app/forensic_audit_logs
           livenessProbe:
             httpGet:
               path: /healthz
               port: 8088
             initialDelaySeconds: 5
             periodSeconds: 10
+      volumes:
+        - name: forensic-logs
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
