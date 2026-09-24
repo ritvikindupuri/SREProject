@@ -6,7 +6,7 @@ metadata:
     policies.kyverno.io/title: "Enforce Pod Security Standards (Zero-Trust)"
     policies.kyverno.io/category: "Pod Security Standards (Restricted)"
     policies.kyverno.io/severity: "High"
-    policies.kyverno.io/description: "Requires containers to run as non-root, drop all capabilities, and use read-only root filesystems."
+    policies.kyverno.io/description: "Requires containers to run as non-root, drop all capabilities, use read-only root filesystems, and apply seccomp RuntimeDefault profile."
 spec:
   validationFailureAction: Enforce
   background: true
@@ -43,3 +43,37 @@ spec:
                   capabilities:
                     drop:
                       - ALL
+
+    - name: require-seccomp-runtime-default-mesh
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+            selector:
+              matchLabels:
+                sentinel.mesh/service: "*"
+      validate:
+        message: "Service mesh pods must use seccomp RuntimeDefault profile."
+        pattern:
+          spec:
+            securityContext:
+              seccompProfile:
+                type: RuntimeDefault
+
+    - name: require-readonly-rootfs-mesh
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+            selector:
+              matchLabels:
+                sentinel.mesh/service: "*"
+      validate:
+        message: "Service mesh containers must use read-only root filesystem."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  readOnlyRootFilesystem: true
