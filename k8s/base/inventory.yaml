@@ -24,6 +24,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: inventory-service
           image: sentinel-mesh/inventory:latest
@@ -40,6 +42,7 @@ spec:
               memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
